@@ -1,26 +1,18 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <odoo>
-    <!-- Acción específica para Recepciones vinculadas -->
-    <record id="action_residuo_recepcion_sale_order" model="ir.actions.act_window">
-        <field name="name">Recepciones</field>
-        <field name="res_model">residuo.recepcion</field>
-        <field name="view_mode">list,form</field>
-        <field name="domain">[('sale_order_id', '=', active_id)]</field>
-        <field name="context">{'default_sale_order_id': active_id}</field>
-    </record>
-
-    <!-- Vista heredada del formulario de Sale Order para agregar botón inteligente -->
+    <!-- Vista heredada del formulario de Sale Order -->
     <record id="view_order_form_inherit_recepcion" model="ir.ui.view">
         <field name="name">sale.order.form.recepcion.inherit</field>
         <field name="model">sale.order</field>
         <field name="inherit_id" ref="sale.view_order_form"/>
         <field name="arch" type="xml">
-            <xpath expr="//header" position="inside">
-                <button class="oe_stat_button" type="action"
-                        name="%(action_residuo_recepcion_sale_order)d"
-                        modifiers='{"invisible": [["recepcion_ids", "=", false]]}'
-                        icon="fa-arrow-down">
-                    Recepciones
+            <xpath expr="//div[@name='button_box']" position="inside">
+                <button class="oe_stat_button" type="object"
+                        name="action_ver_recepciones"
+                        invisible="recepcion_count == 0"
+                        icon="fa-truck">
+                    <field name="recepcion_count" widget="statinfo"
+                           string="Recepciones"/>
                 </button>
             </xpath>
         </field>
