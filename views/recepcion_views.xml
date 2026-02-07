@@ -102,14 +102,12 @@
                 <separator/>
                 <filter string="Hoy" name="hoy"
                         domain="[('fecha_recepcion', '=', context_today().strftime('%Y-%m-%d'))]"/>
-                <group expand="0" string="Agrupar por">
                     <filter string="Cliente" name="group_partner"
                             context="{'group_by': 'partner_id'}"/>
                     <filter string="Estado" name="group_estado"
                             context="{'group_by': 'estado'}"/>
                     <filter string="Fecha" name="group_fecha"
                             context="{'group_by': 'fecha_recepcion'}"/>
-                </group>
             </search>
         </field>
     </record>
