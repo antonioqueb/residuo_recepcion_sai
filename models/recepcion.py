@@ -15,19 +15,36 @@ class ResiduoRecepcion(models.Model):
         copy=False,
         tracking=True,
     )
+    
+    # MODIFICADO: required=False para permitir creación desde Manifiesto
     sale_order_id = fields.Many2one(
         'sale.order',
         string='Orden de Venta',
-        required=True,
+        required=False, 
         tracking=True,
         ondelete='restrict',
     )
-    partner_id = fields.Many2one(
-        related='sale_order_id.partner_id',
-        string='Cliente',
-        store=True,
+
+    # NUEVO: Enlace con el Manifiesto
+    manifiesto_id = fields.Many2one(
+        'manifiesto.ambiental',
+        string='Manifiesto de Origen',
         readonly=True,
+        tracking=True,
+        help="Manifiesto desde el cual se generó esta recepción."
     )
+
+    # MODIFICADO: Cambiado de Related puro a Compute almacenado editable
+    partner_id = fields.Many2one(
+        'res.partner',
+        string='Cliente / Generador',
+        compute='_compute_partner_id',
+        store=True,
+        readonly=False, # Importante: permite escritura manual o vía código
+        required=True,
+        tracking=True,
+    )
+
     picking_id = fields.Many2one(
         'stock.picking',
         string='Entrada de Inventario',
@@ -62,6 +79,14 @@ class ResiduoRecepcion(models.Model):
         default=lambda self: self.env.company,
         required=True,
     )
+
+    @api.depends('sale_order_id')
+    def _compute_partner_id(self):
+        for rec in self:
+            # Solo sobrescribir si hay una orden de venta vinculada
+            if rec.sale_order_id:
+                rec.partner_id = rec.sale_order_id.partner_id
+            # Si no hay sale_order (ej. viene de Manifiesto), se respeta el valor asignado
 
     @api.model_create_multi
     def create(self, vals_list):
@@ -102,8 +127,9 @@ class ResiduoRecepcion(models.Model):
         """Crea y valida el picking de entrada de inventario."""
         self.ensure_one()
 
+        # MODIFICADO: Usar self.partner_id directamente (funciona para SO y Manifiesto)
         stock_location_cliente = (
-            self.sale_order_id.partner_id.property_stock_customer
+            self.partner_id.property_stock_customer
             or self.env.ref('stock.stock_location_customers')
         )
         stock_location_destino = self.env.ref('stock.stock_location_stock')

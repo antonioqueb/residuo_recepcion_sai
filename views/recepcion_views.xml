@@ -33,7 +33,12 @@
                         <group>
                             <field name="sale_order_id"
                                    readonly="estado != 'borrador'"/>
-                            <field name="partner_id"/>
+                            <!-- NUEVO CAMPO VISIBLE -->
+                            <field name="manifiesto_id"
+                                   readonly="1"
+                                   invisible="not manifiesto_id"/>
+                            <field name="partner_id"
+                                   readonly="estado != 'borrador'"/>
                             <field name="fecha_recepcion"
                                    readonly="estado != 'borrador'"/>
                         </group>
@@ -71,10 +76,11 @@
         <field name="arch" type="xml">
             <list>
                 <field name="name" decoration-bf="1"/>
-                <field name="sale_order_id"/>
+                <field name="sale_order_id" optional="show"/>
+                <field name="manifiesto_id" optional="show"/>
                 <field name="partner_id"/>
                 <field name="fecha_recepcion"/>
-                <field name="picking_id"/>
+                <field name="picking_id" optional="hide"/>
                 <field name="estado"
                        decoration-success="estado == 'confirmado'"
                        decoration-muted="estado == 'cancelado'"
@@ -92,6 +98,7 @@
             <search>
                 <field name="name"/>
                 <field name="sale_order_id"/>
+                <field name="manifiesto_id"/>
                 <field name="partner_id"/>
                 <filter string="Borrador" name="borrador"
                         domain="[('estado', '=', 'borrador')]"/>
@@ -123,7 +130,7 @@
                 Crea tu primera recepción de residuos
             </p>
             <p>
-                Las recepciones se crean automáticamente al confirmar una orden de venta.
+                Las recepciones se crean automáticamente al confirmar una orden de venta o desde un Manifiesto Ambiental.
             </p>
         </field>
     </record>
