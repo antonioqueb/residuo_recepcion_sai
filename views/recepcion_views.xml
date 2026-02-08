@@ -94,6 +94,9 @@
         <field name="context">{'search_default_borrador': 1}</field>
     </record>
 
-    <menuitem id="menu_residuo_root" name="Recolecciones" sequence="10"/>
+    <menuitem id="menu_residuo_root"
+            name="Recolecciones"
+            sequence="10"
+            web_icon="residuo_recepcion_sai,static/description/icon.png"/>
     <menuitem id="menu_residuo_recepcion" name="Recepciones" parent="menu_residuo_root" action="action_residuo_recepcion" sequence="10"/>
 </odoo>
