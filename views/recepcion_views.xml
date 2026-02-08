@@ -34,9 +34,7 @@
                         <group>
                             <field name="sale_order_id"
                                    readonly="estado != 'borrador'"/>
-                            <field name="manifiesto_id" 
-                                   readonly="1" 
-                                   invisible="not manifiesto_id"/>
+                            <!-- MANIFIESTO_ID INYECTADO POR HERENCIA EN OTRO MÓDULO -->
                             <field name="partner_id"
                                    readonly="estado != 'borrador'"/>
                             <field name="fecha_recepcion"
@@ -93,7 +91,6 @@
             <list>
                 <field name="name" decoration-bf="1"/>
                 <field name="sale_order_id" optional="show"/>
-                <field name="manifiesto_id" optional="show"/>
                 <field name="partner_id"/>
                 <field name="fecha_recepcion"/>
                 <field name="picking_id" optional="hide"/>
@@ -114,7 +111,6 @@
             <search>
                 <field name="name"/>
                 <field name="sale_order_id"/>
-                <field name="manifiesto_id"/>
                 <field name="partner_id"/>
                 <filter string="Borrador" name="borrador"
                         domain="[('estado', '=', 'borrador')]"/>

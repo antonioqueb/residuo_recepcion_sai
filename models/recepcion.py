@@ -23,14 +23,9 @@ class ResiduoRecepcion(models.Model):
         tracking=True,
         ondelete='restrict',
     )
-
-    # Vinculación con el módulo de manifiestos
-    manifiesto_id = fields.Many2one(
-        'manifiesto.ambiental',
-        string='Manifiesto de Origen',
-        readonly=True,
-        tracking=True,
-    )
+    
+    # ELIMINADO: manifiesto_id 
+    # (Se inyectará desde el módulo manifiesto_ambiental para evitar Error de Dependencia Circular)
 
     partner_id = fields.Many2one(
         'res.partner',
