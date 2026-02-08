@@ -9,9 +9,10 @@
                 <header>
                     <button name="action_confirmar"
                             type="object"
-                            string="Confirmar"
+                            string="Confirmar Recepción"
                             class="btn-primary"
-                            invisible="estado != 'borrador'"/>
+                            invisible="estado != 'borrador'"
+                            confirm="¿Ha verificado que todos los productos destino fueron seleccionados correctamente?"/>
                     <button name="action_cancelar"
                             type="object"
                             string="Cancelar"
@@ -33,6 +34,9 @@
                         <group>
                             <field name="sale_order_id"
                                    readonly="estado != 'borrador'"/>
+                            <field name="manifiesto_id" 
+                                   readonly="1" 
+                                   invisible="not manifiesto_id"/>
                             <field name="partner_id"
                                    readonly="estado != 'borrador'"/>
                             <field name="fecha_recepcion"
@@ -45,13 +49,29 @@
                     </group>
                     <notebook>
                         <page string="Residuos Recolectados">
+                            <div class="alert alert-info" role="alert" invisible="estado != 'borrador'">
+                                <strong>Instrucciones:</strong> Verifique la descripción del Manifiesto (Izquierda) y seleccione el producto consumible correspondiente (Derecha).
+                            </div>
                             <field name="linea_ids"
                                    readonly="estado != 'borrador'">
-                                <list editable="bottom">
-                                    <field name="product_id"/>
+                                <list editable="bottom" create="false" delete="true">
+                                    <!-- LADO IZQUIERDO: Descripción original -->
+                                    <field name="descripcion_origen" 
+                                           string="Descripción Manifiesto" 
+                                           readonly="1" 
+                                           force_save="1"
+                                           decoration-bf="1"/>
+                                    
+                                    <!-- LADO DERECHO: Selector limpio -->
+                                    <field name="product_id" 
+                                           string="Producto Destino (Selec.)"
+                                           placeholder="Seleccione consumible..."
+                                           options="{'no_create': True, 'no_open': True}"/>
+                                    
+                                    <field name="lote_asignado" string="Lote (Manifiesto)"/>
                                     <field name="cantidad"/>
-                                    <field name="unidad" readonly="1"/>
-                                    <field name="categoria" readonly="1"/>
+                                    <field name="unidad" readonly="1" optional="hide"/>
+                                    <field name="categoria" readonly="1" optional="hide"/>
                                 </list>
                             </field>
                         </page>
@@ -73,6 +93,7 @@
             <list>
                 <field name="name" decoration-bf="1"/>
                 <field name="sale_order_id" optional="show"/>
+                <field name="manifiesto_id" optional="show"/>
                 <field name="partner_id"/>
                 <field name="fecha_recepcion"/>
                 <field name="picking_id" optional="hide"/>
@@ -93,6 +114,7 @@
             <search>
                 <field name="name"/>
                 <field name="sale_order_id"/>
+                <field name="manifiesto_id"/>
                 <field name="partner_id"/>
                 <filter string="Borrador" name="borrador"
                         domain="[('estado', '=', 'borrador')]"/>
@@ -124,7 +146,7 @@
                 Crea tu primera recepción de residuos
             </p>
             <p>
-                Las recepciones se crean automáticamente al confirmar una orden de venta.
+                Las recepciones se generan desde los Manifiestos Ambientales o Órdenes de Venta.
             </p>
         </field>
     </record>

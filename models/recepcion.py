@@ -24,7 +24,13 @@ class ResiduoRecepcion(models.Model):
         ondelete='restrict',
     )
 
-    # ELIMINADO: manifiesto_id (Esto se inyecta desde el otro módulo)
+    # Vinculación con el módulo de manifiestos
+    manifiesto_id = fields.Many2one(
+        'manifiesto.ambiental',
+        string='Manifiesto de Origen',
+        readonly=True,
+        tracking=True,
+    )
 
     partner_id = fields.Many2one(
         'res.partner',
@@ -42,6 +48,7 @@ class ResiduoRecepcion(models.Model):
         readonly=True,
         copy=False,
     )
+    
     estado = fields.Selection(
         selection=[
             ('borrador', 'Borrador'),
@@ -53,17 +60,21 @@ class ResiduoRecepcion(models.Model):
         tracking=True,
         copy=False,
     )
+    
     linea_ids = fields.One2many(
         'residuo.recepcion.linea',
         'recepcion_id',
         string='Residuos Recolectados',
     )
+    
     notas = fields.Html(string='Notas')
+    
     fecha_recepcion = fields.Date(
         string='Fecha de Recepción',
         default=fields.Date.context_today,
         tracking=True,
     )
+    
     company_id = fields.Many2one(
         'res.company',
         string='Compañía',
@@ -93,15 +104,24 @@ class ResiduoRecepcion(models.Model):
             if not rec.linea_ids:
                 raise UserError(_('Debe agregar al menos un residuo a recolectar.'))
 
+            # Validar que todas las líneas tengan producto seleccionado
             for linea in rec.linea_ids:
+                if not linea.product_id:
+                    raise UserError(
+                        _('Debe seleccionar el "Producto Destino" para el residuo: %s') 
+                        % (linea.descripcion_origen or 'Sin descripción')
+                    )
+                
+                # Doble validación de seguridad para tipo consu
+                if linea.product_id.type != 'consu':
+                     raise ValidationError(
+                        _('El producto seleccionado "%s" debe ser de tipo Consumible (consu).') 
+                        % linea.product_id.name
+                    )
+
                 if linea.cantidad <= 0:
                     raise ValidationError(
                         _('La cantidad del producto %s debe ser mayor a 0.')
-                        % linea.product_id.display_name
-                    )
-                if not linea.product_id.uom_id:
-                    raise UserError(
-                        _('El producto %s no tiene unidad de medida definida.')
                         % linea.product_id.display_name
                     )
 
@@ -130,6 +150,7 @@ class ResiduoRecepcion(models.Model):
         })
 
         for linea in self.linea_ids:
+            # Crear movimiento
             move = self.env['stock.move'].create({
                 'name': linea.product_id.display_name,
                 'product_id': linea.product_id.id,
@@ -139,7 +160,9 @@ class ResiduoRecepcion(models.Model):
                 'location_id': stock_location_cliente.id,
                 'location_dest_id': stock_location_destino.id,
             })
-            self.env['stock.move.line'].create({
+            
+            # Crear línea detallada con lote asignado
+            move_line_vals = {
                 'move_id': move.id,
                 'picking_id': picking.id,
                 'product_id': linea.product_id.id,
@@ -147,13 +170,23 @@ class ResiduoRecepcion(models.Model):
                 'quantity': linea.cantidad,
                 'location_id': stock_location_cliente.id,
                 'location_dest_id': stock_location_destino.id,
-            })
+            }
+            
+            # Asignar el número de manifiesto como nombre de lote
+            if linea.lote_asignado:
+                move_line_vals['lot_name'] = linea.lote_asignado
+                
+            self.env['stock.move.line'].create(move_line_vals)
 
         picking.action_confirm()
         picking.action_assign()
 
         if picking.state in ('assigned', 'confirmed'):
-            res = picking.button_validate()
+            # Intentar validar automáticamente evitando wizards
+            ctx = self.env.context.copy()
+            ctx.update({'skip_backorder': True})
+            
+            res = picking.with_context(ctx).button_validate()
             if isinstance(res, dict) and res.get('res_model') == 'stock.backorder.confirmation':
                 wizard = self.env['stock.backorder.confirmation'].with_context(
                     **res.get('context', {})
@@ -191,18 +224,38 @@ class ResiduoRecepcionLinea(models.Model):
         ondelete='cascade',
         required=True,
     )
+
+    # Campo izquierdo: Nota/Descripción original del manifiesto
+    descripcion_origen = fields.Char(
+        string='Descripción Manifiesto',
+        readonly=True,
+        help="Nombre del residuo tal como aparece en el manifiesto."
+    )
+
+    # Campo derecho: Selector de producto (limpio al inicio)
     product_id = fields.Many2one(
         'product.product',
-        string='Residuo',
-        required=True,
+        string='Producto Destino',
+        required=False,  # No requerido al crear, sí al confirmar
+        domain=[('type', '=', 'consu')], # Solo consumibles
         context={'create': False},
+        help="Seleccione el producto consumible correspondiente."
     )
-    cantidad = fields.Float(string='Cantidad', required=True, default=1.0)
+
+    # Campo de lote: Número de manifiesto
+    lote_asignado = fields.Char(
+        string='Lote / Manifiesto',
+        help="Número de lote asignado (corresponde al número de manifiesto)"
+    )
+
+    cantidad = fields.Float(string='Cantidad', required=True, default=0.0)
+    
     unidad = fields.Char(
         string='Unidad de Medida',
         related='product_id.uom_id.name',
         readonly=True,
     )
+    
     categoria = fields.Char(
         string='Categoría',
         related='product_id.categ_id.name',
@@ -214,7 +267,6 @@ class ResiduoRecepcionLinea(models.Model):
         for linea in self:
             if linea.cantidad <= 0:
                 raise ValidationError(_('La cantidad debe ser mayor a 0.'))
-
 
 class ProductTemplate(models.Model):
     _inherit = 'product.template'
