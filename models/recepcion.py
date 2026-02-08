@@ -102,6 +102,9 @@ class ResiduoRecepcion(models.Model):
                         % (linea.descripcion_origen or 'Sin descripción')
                     )
                 
+                # Nota: Se eliminó la validación estricta de 'consu' si se desea rastrear lotes,
+                # ya que usualmente los lotes requieren productos 'storable' (Almacenables).
+                # Si sus productos son 'consu' y rastrean lotes, mantenga la validación.
                 if linea.product_id.type != 'consu':
                      raise ValidationError(
                         _('El producto seleccionado "%s" debe ser de tipo Consumible (consu).') 
@@ -139,54 +142,66 @@ class ResiduoRecepcion(models.Model):
         })
 
         for linea in self.linea_ids:
-            # --- CREACIÓN DE STOCK.MOVE ---
+            # 1. Crear el Stock Move (La demanda)
             move = self.env['stock.move'].create({
-                # CORRECCIÓN 1: Usar 'description_picking' en lugar de 'name'
                 'description_picking': linea.product_id.display_name,
-                
                 'product_id': linea.product_id.id,
                 'product_uom_qty': linea.cantidad,
-                
-                # CORRECCIÓN 2: En stock.move el campo sigue siendo 'product_uom'
-                'product_uom': linea.product_id.uom_id.id,
-                
+                'product_uom': linea.product_id.uom_id.id, # Odoo 19: stock.move usa 'product_uom' (legacy)
                 'picking_id': picking.id,
                 'location_id': stock_location_cliente.id,
                 'location_dest_id': stock_location_destino.id,
             })
             
-            # --- CREACIÓN DE STOCK.MOVE.LINE ---
+            # 2. Preparar valores para Stock Move Line (La ejecución real con lotes)
             move_line_vals = {
                 'move_id': move.id,
                 'picking_id': picking.id,
                 'product_id': linea.product_id.id,
-                
-                # CORRECCIÓN 3: En stock.move.line el campo SI ES 'product_uom_id'
-                'product_uom_id': linea.product_id.uom_id.id,
-                
+                'product_uom_id': linea.product_id.uom_id.id, # Odoo 19: stock.move.line usa 'product_uom_id'
                 'quantity': linea.cantidad,
                 'location_id': stock_location_cliente.id,
                 'location_dest_id': stock_location_destino.id,
             }
             
+            # 3. LÓGICA CORREGIDA PARA LOTES: Evitar error de duplicado
             if linea.lote_asignado:
-                move_line_vals['lot_name'] = linea.lote_asignado
+                # Buscamos si el lote YA existe para este producto y compañía
+                lote_existente = self.env['stock.lot'].search([
+                    ('name', '=', linea.lote_asignado),
+                    ('product_id', '=', linea.product_id.id),
+                    ('company_id', '=', self.company_id.id)
+                ], limit=1)
+
+                if lote_existente:
+                    # Si existe, asignamos el ID (no intenta crear uno nuevo)
+                    move_line_vals['lot_id'] = lote_existente.id
+                else:
+                    # Si no existe, asignamos el nombre (Odoo lo creará al vuelo)
+                    move_line_vals['lot_name'] = linea.lote_asignado
                 
             self.env['stock.move.line'].create(move_line_vals)
 
+        # 4. Confirmar y asignar
         picking.action_confirm()
         picking.action_assign()
 
+        # 5. Validación automática
         if picking.state in ('assigned', 'confirmed'):
             ctx = self.env.context.copy()
             ctx.update({'skip_backorder': True})
             
-            res = picking.with_context(ctx).button_validate()
-            if isinstance(res, dict) and res.get('res_model') == 'stock.backorder.confirmation':
-                wizard = self.env['stock.backorder.confirmation'].with_context(
-                    **res.get('context', {})
-                ).create({})
-                wizard.process()
+            try:
+                res = picking.with_context(ctx).button_validate()
+                if isinstance(res, dict) and res.get('res_model') == 'stock.backorder.confirmation':
+                    wizard = self.env['stock.backorder.confirmation'].with_context(
+                        **res.get('context', {})
+                    ).create({})
+                    wizard.process()
+            except ValidationError as e:
+                # Capturamos error si el lote ya está en stock y no permite reingreso, 
+                # pero permitimos que el picking se cree en estado 'Asignado' para revisión manual.
+                raise UserError(_("Se creó la entrada %s pero hubo un error al validarla automáticamente: %s") % (picking.name, str(e)))
         else:
             raise UserError(_('No se pudo reservar el inventario.'))
 
