@@ -23,9 +23,6 @@ class ResiduoRecepcion(models.Model):
         ondelete='restrict',
     )
     
-    # --- ELIMINADO: manifiesto_id ---
-    # Este campo NO debe estar aquí. Se inyectará desde el otro módulo.
-
     partner_id = fields.Many2one(
         'res.partner',
         string='Cliente / Generador',
@@ -142,23 +139,31 @@ class ResiduoRecepcion(models.Model):
         })
 
         for linea in self.linea_ids:
-            # CORRECCIÓN PARA ODOO 19
+            # --- CREACIÓN DE STOCK.MOVE ---
             move = self.env['stock.move'].create({
-                # 'name': linea.product_id.display_name, # <-- ERROR ORIGINAL ELIMINADO
-                'description_picking': linea.product_id.display_name, # Nueva forma de poner descripción
+                # CORRECCIÓN 1: Usar 'description_picking' en lugar de 'name'
+                'description_picking': linea.product_id.display_name,
+                
                 'product_id': linea.product_id.id,
                 'product_uom_qty': linea.cantidad,
-                'product_uom_id': linea.product_id.uom_id.id, # <-- CORREGIDO: product_uom -> product_uom_id
+                
+                # CORRECCIÓN 2: En stock.move el campo sigue siendo 'product_uom'
+                'product_uom': linea.product_id.uom_id.id,
+                
                 'picking_id': picking.id,
                 'location_id': stock_location_cliente.id,
                 'location_dest_id': stock_location_destino.id,
             })
             
+            # --- CREACIÓN DE STOCK.MOVE.LINE ---
             move_line_vals = {
                 'move_id': move.id,
                 'picking_id': picking.id,
                 'product_id': linea.product_id.id,
-                'product_uom_id': linea.product_id.uom_id.id, # <-- CORREGIDO: product_uom_id
+                
+                # CORRECCIÓN 3: En stock.move.line el campo SI ES 'product_uom_id'
+                'product_uom_id': linea.product_id.uom_id.id,
+                
                 'quantity': linea.cantidad,
                 'location_id': stock_location_cliente.id,
                 'location_dest_id': stock_location_destino.id,
