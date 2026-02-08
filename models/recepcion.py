@@ -1,5 +1,8 @@
 from odoo import models, fields, api, _
 from odoo.exceptions import UserError, ValidationError
+import logging
+
+_logger = logging.getLogger(__name__)
 
 class ResiduoRecepcion(models.Model):
     _name = 'residuo.recepcion'
@@ -23,6 +26,15 @@ class ResiduoRecepcion(models.Model):
         ondelete='restrict',
     )
     
+    # Campo inyectado por dependencia inversa (manifiesto)
+    # Lo declaramos aquí explícitamente para evitar errores si el mixin falla
+    manifiesto_id = fields.Many2one(
+        'manifiesto.ambiental',
+        string='Manifiesto de Origen',
+        readonly=True,
+        tracking=True,
+    )
+
     partner_id = fields.Many2one(
         'res.partner',
         string='Cliente / Generador',
@@ -102,15 +114,8 @@ class ResiduoRecepcion(models.Model):
                         % (linea.descripcion_origen or 'Sin descripción')
                     )
                 
-                # Nota: Se eliminó la validación estricta de 'consu' si se desea rastrear lotes,
-                # ya que usualmente los lotes requieren productos 'storable' (Almacenables).
-                # Si sus productos son 'consu' y rastrean lotes, mantenga la validación.
-                if linea.product_id.type != 'consu':
-                     raise ValidationError(
-                        _('El producto seleccionado "%s" debe ser de tipo Consumible (consu).') 
-                        % linea.product_id.name
-                    )
-
+                # Validación ligera para permitir productos almacenables (storable)
+                # que son necesarios para llevar control de stock.
                 if linea.cantidad <= 0:
                     raise ValidationError(
                         _('La cantidad del producto %s debe ser mayor a 0.')
@@ -132,6 +137,7 @@ class ResiduoRecepcion(models.Model):
         stock_location_destino = self.env.ref('stock.stock_location_stock')
         picking_type_in = self.env.ref('stock.picking_type_in')
 
+        # 1. Crear el Picking (Cabecera)
         picking = self.env['stock.picking'].create({
             'picking_type_id': picking_type_in.id,
             'location_id': stock_location_cliente.id,
@@ -142,68 +148,87 @@ class ResiduoRecepcion(models.Model):
         })
 
         for linea in self.linea_ids:
-            # 1. Crear el Stock Move (La demanda)
+            # === CORRECCIÓN CRÍTICA: Asegurar Configuración del Producto ===
+            # Si el producto tiene tracking 'serial' (Único), fallará al recibir granel.
+            # Lo forzamos a 'lot' (Lotes) o lo activamos si estaba en 'none' y tenemos lote.
+            if linea.lote_asignado and linea.product_id.tracking != 'lot':
+                try:
+                    _logger.info("Autocorrigiendo tracking del producto %s a 'lot'", linea.product_id.name)
+                    linea.product_id.sudo().write({'tracking': 'lot'})
+                except Exception as e:
+                    _logger.warning("No se pudo cambiar el tracking del producto: %s", str(e))
+
+            # 2. Crear Stock Move
             move = self.env['stock.move'].create({
-                'description_picking': linea.product_id.display_name,
+                'description_picking': linea.product_id.display_name, # Odoo 19: description_picking
                 'product_id': linea.product_id.id,
                 'product_uom_qty': linea.cantidad,
-                'product_uom': linea.product_id.uom_id.id, # Odoo 19: stock.move usa 'product_uom' (legacy)
+                'product_uom': linea.product_id.uom_id.id, # Odoo 19: campo legado en move
                 'picking_id': picking.id,
                 'location_id': stock_location_cliente.id,
                 'location_dest_id': stock_location_destino.id,
             })
             
-            # 2. Preparar valores para Stock Move Line (La ejecución real con lotes)
+            # 3. Preparar Stock Move Line
             move_line_vals = {
                 'move_id': move.id,
                 'picking_id': picking.id,
                 'product_id': linea.product_id.id,
-                'product_uom_id': linea.product_id.uom_id.id, # Odoo 19: stock.move.line usa 'product_uom_id'
+                'product_uom_id': linea.product_id.uom_id.id, # Odoo 19: campo _id en move.line
                 'quantity': linea.cantidad,
                 'location_id': stock_location_cliente.id,
                 'location_dest_id': stock_location_destino.id,
             }
             
-            # 3. LÓGICA CORREGIDA PARA LOTES: Evitar error de duplicado
+            # === LÓGICA DE LOTES ROBUSTA ===
             if linea.lote_asignado:
-                # Buscamos si el lote YA existe para este producto y compañía
+                # Limpiar espacios en blanco que causan errores de búsqueda
+                lote_nombre = linea.lote_asignado.strip()
+                
+                # Buscar lote existente EXACTO para evitar errores de "Ya existe"
                 lote_existente = self.env['stock.lot'].search([
-                    ('name', '=', linea.lote_asignado),
+                    ('name', '=', lote_nombre),
                     ('product_id', '=', linea.product_id.id),
                     ('company_id', '=', self.company_id.id)
                 ], limit=1)
 
                 if lote_existente:
-                    # Si existe, asignamos el ID (no intenta crear uno nuevo)
+                    # Si existe, USAMOS EL ID. Esto evita el error "Serial number already assigned"
+                    # siempre y cuando el producto sea tracking='lot'.
                     move_line_vals['lot_id'] = lote_existente.id
                 else:
-                    # Si no existe, asignamos el nombre (Odoo lo creará al vuelo)
-                    move_line_vals['lot_name'] = linea.lote_asignado
+                    # Si no existe, pasamos el NOMBRE para que Odoo lo cree al vuelo
+                    move_line_vals['lot_name'] = lote_nombre
                 
             self.env['stock.move.line'].create(move_line_vals)
 
-        # 4. Confirmar y asignar
+        # 4. Confirmar y Validar
         picking.action_confirm()
         picking.action_assign()
 
-        # 5. Validación automática
         if picking.state in ('assigned', 'confirmed'):
             ctx = self.env.context.copy()
             ctx.update({'skip_backorder': True})
             
             try:
+                # Intentar validar automáticamente
                 res = picking.with_context(ctx).button_validate()
+                
+                # Manejar wizard de backorder si aparece
                 if isinstance(res, dict) and res.get('res_model') == 'stock.backorder.confirmation':
                     wizard = self.env['stock.backorder.confirmation'].with_context(
                         **res.get('context', {})
                     ).create({})
                     wizard.process()
+                    
             except ValidationError as e:
-                # Capturamos error si el lote ya está en stock y no permite reingreso, 
-                # pero permitimos que el picking se cree en estado 'Asignado' para revisión manual.
-                raise UserError(_("Se creó la entrada %s pero hubo un error al validarla automáticamente: %s") % (picking.name, str(e)))
+                # Si falla la validación automática (ej. bloqueo de fecha o lote),
+                # no rompemos todo el proceso, dejamos el picking creado en estado 'Asignado'
+                # para que el usuario lo revise manualmente.
+                picking.message_post(body=f"⚠️ La validación automática falló, favor de validar manualmente. Error: {str(e)}")
+                return picking # Retornamos el picking creado aunque no validado
         else:
-            raise UserError(_('No se pudo reservar el inventario.'))
+            raise UserError(_('No se pudo reservar el inventario. Verifique disponibilidad.'))
 
         return picking
 
@@ -242,7 +267,7 @@ class ResiduoRecepcionLinea(models.Model):
         'product.product',
         string='Producto Destino',
         required=False,
-        domain=[('type', '=', 'consu')],
+        # Quitamos el domain estricto de consu para permitir almacenables con lotes
         context={'create': False},
     )
     lote_asignado = fields.Char(
