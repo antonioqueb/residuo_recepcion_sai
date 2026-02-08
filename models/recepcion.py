@@ -142,11 +142,13 @@ class ResiduoRecepcion(models.Model):
         })
 
         for linea in self.linea_ids:
+            # CORRECCIÓN PARA ODOO 19
             move = self.env['stock.move'].create({
-                'name': linea.product_id.display_name,
+                # 'name': linea.product_id.display_name, # <-- ERROR ORIGINAL ELIMINADO
+                'description_picking': linea.product_id.display_name, # Nueva forma de poner descripción
                 'product_id': linea.product_id.id,
                 'product_uom_qty': linea.cantidad,
-                'product_uom': linea.product_id.uom_id.id,
+                'product_uom_id': linea.product_id.uom_id.id, # <-- CORREGIDO: product_uom -> product_uom_id
                 'picking_id': picking.id,
                 'location_id': stock_location_cliente.id,
                 'location_dest_id': stock_location_destino.id,
@@ -156,7 +158,7 @@ class ResiduoRecepcion(models.Model):
                 'move_id': move.id,
                 'picking_id': picking.id,
                 'product_id': linea.product_id.id,
-                'product_uom_id': linea.product_id.uom_id.id,
+                'product_uom_id': linea.product_id.uom_id.id, # <-- CORREGIDO: product_uom_id
                 'quantity': linea.cantidad,
                 'location_id': stock_location_cliente.id,
                 'location_dest_id': stock_location_destino.id,
