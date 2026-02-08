@@ -1,7 +1,6 @@
 from odoo import models, fields, api, _
 from odoo.exceptions import UserError, ValidationError
 
-
 class ResiduoRecepcion(models.Model):
     _name = 'residuo.recepcion'
     _description = 'Recepción de Residuos Peligrosos'
@@ -24,8 +23,8 @@ class ResiduoRecepcion(models.Model):
         ondelete='restrict',
     )
     
-    # ELIMINADO: manifiesto_id 
-    # (Se inyectará desde el módulo manifiesto_ambiental para evitar Error de Dependencia Circular)
+    # --- ELIMINADO: manifiesto_id ---
+    # Este campo NO debe estar aquí. Se inyectará desde el otro módulo.
 
     partner_id = fields.Many2one(
         'res.partner',
@@ -99,7 +98,6 @@ class ResiduoRecepcion(models.Model):
             if not rec.linea_ids:
                 raise UserError(_('Debe agregar al menos un residuo a recolectar.'))
 
-            # Validar que todas las líneas tengan producto seleccionado
             for linea in rec.linea_ids:
                 if not linea.product_id:
                     raise UserError(
@@ -107,7 +105,6 @@ class ResiduoRecepcion(models.Model):
                         % (linea.descripcion_origen or 'Sin descripción')
                     )
                 
-                # Doble validación de seguridad para tipo consu
                 if linea.product_id.type != 'consu':
                      raise ValidationError(
                         _('El producto seleccionado "%s" debe ser de tipo Consumible (consu).') 
@@ -145,7 +142,6 @@ class ResiduoRecepcion(models.Model):
         })
 
         for linea in self.linea_ids:
-            # Crear movimiento
             move = self.env['stock.move'].create({
                 'name': linea.product_id.display_name,
                 'product_id': linea.product_id.id,
@@ -156,7 +152,6 @@ class ResiduoRecepcion(models.Model):
                 'location_dest_id': stock_location_destino.id,
             })
             
-            # Crear línea detallada con lote asignado
             move_line_vals = {
                 'move_id': move.id,
                 'picking_id': picking.id,
@@ -167,7 +162,6 @@ class ResiduoRecepcion(models.Model):
                 'location_dest_id': stock_location_destino.id,
             }
             
-            # Asignar el número de manifiesto como nombre de lote
             if linea.lote_asignado:
                 move_line_vals['lot_name'] = linea.lote_asignado
                 
@@ -177,7 +171,6 @@ class ResiduoRecepcion(models.Model):
         picking.action_assign()
 
         if picking.state in ('assigned', 'confirmed'):
-            # Intentar validar automáticamente evitando wizards
             ctx = self.env.context.copy()
             ctx.update({'skip_backorder': True})
             
@@ -219,43 +212,23 @@ class ResiduoRecepcionLinea(models.Model):
         ondelete='cascade',
         required=True,
     )
-
-    # Campo izquierdo: Nota/Descripción original del manifiesto
     descripcion_origen = fields.Char(
         string='Descripción Manifiesto',
         readonly=True,
-        help="Nombre del residuo tal como aparece en el manifiesto."
     )
-
-    # Campo derecho: Selector de producto (limpio al inicio)
     product_id = fields.Many2one(
         'product.product',
         string='Producto Destino',
-        required=False,  # No requerido al crear, sí al confirmar
-        domain=[('type', '=', 'consu')], # Solo consumibles
+        required=False,
+        domain=[('type', '=', 'consu')],
         context={'create': False},
-        help="Seleccione el producto consumible correspondiente."
     )
-
-    # Campo de lote: Número de manifiesto
     lote_asignado = fields.Char(
         string='Lote / Manifiesto',
-        help="Número de lote asignado (corresponde al número de manifiesto)"
     )
-
     cantidad = fields.Float(string='Cantidad', required=True, default=0.0)
-    
-    unidad = fields.Char(
-        string='Unidad de Medida',
-        related='product_id.uom_id.name',
-        readonly=True,
-    )
-    
-    categoria = fields.Char(
-        string='Categoría',
-        related='product_id.categ_id.name',
-        readonly=True,
-    )
+    unidad = fields.Char(related='product_id.uom_id.name', readonly=True)
+    categoria = fields.Char(related='product_id.categ_id.name', readonly=True)
 
     @api.constrains('cantidad')
     def _check_cantidad(self):
