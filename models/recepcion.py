@@ -1,6 +1,7 @@
 from odoo import models, fields, api, _
 from odoo.exceptions import UserError, ValidationError
 
+
 class ResiduoRecepcion(models.Model):
     _name = 'residuo.recepcion'
     _description = 'Recepción de Residuos Peligrosos'
@@ -10,67 +11,33 @@ class ResiduoRecepcion(models.Model):
     name = fields.Char(
         string='Referencia',
         default=lambda self: _('Nueva'),
-        readonly=True,
-        copy=False,
-        tracking=True,
+        readonly=True, copy=False, tracking=True,
     )
-    
     sale_order_id = fields.Many2one(
-        'sale.order',
-        string='Orden de Venta',
-        required=False, 
-        tracking=True,
-        ondelete='restrict',
+        'sale.order', string='Orden de Venta',
+        required=False, tracking=True, ondelete='restrict',
     )
-    
     partner_id = fields.Many2one(
-        'res.partner',
-        string='Cliente / Generador',
-        compute='_compute_partner_id',
-        store=True,
-        readonly=False,
-        required=True,
-        tracking=True,
+        'res.partner', string='Cliente / Generador',
+        compute='_compute_partner_id', store=True,
+        readonly=False, required=True, tracking=True,
     )
-
     picking_id = fields.Many2one(
-        'stock.picking',
-        string='Entrada de Inventario',
-        readonly=True,
-        copy=False,
+        'stock.picking', string='Entrada de Inventario',
+        readonly=True, copy=False,
     )
-    
     estado = fields.Selection(
-        selection=[
-            ('borrador', 'Borrador'),
-            ('confirmado', 'Confirmado'),
-            ('cancelado', 'Cancelado'),
-        ],
-        default='borrador',
-        string='Estado',
-        tracking=True,
-        copy=False,
+        [('borrador', 'Borrador'), ('confirmado', 'Confirmado'), ('cancelado', 'Cancelado')],
+        default='borrador', string='Estado', tracking=True, copy=False,
     )
-    
-    linea_ids = fields.One2many(
-        'residuo.recepcion.linea',
-        'recepcion_id',
-        string='Residuos Recolectados',
-    )
-    
+    linea_ids = fields.One2many('residuo.recepcion.linea', 'recepcion_id', string='Residuos Recolectados')
     notas = fields.Html(string='Notas')
-    
     fecha_recepcion = fields.Date(
-        string='Fecha de Recepción',
-        default=fields.Date.context_today,
-        tracking=True,
+        string='Fecha de Recepción', default=fields.Date.context_today, tracking=True,
     )
-    
     company_id = fields.Many2one(
-        'res.company',
-        string='Compañía',
-        default=lambda self: self.env.company,
-        required=True,
+        'res.company', string='Compañía',
+        default=lambda self: self.env.company, required=True,
     )
 
     @api.depends('sale_order_id')
@@ -84,8 +51,7 @@ class ResiduoRecepcion(models.Model):
         for vals in vals_list:
             if vals.get('name', _('Nueva')) == _('Nueva'):
                 vals['name'] = self.env['ir.sequence'].next_by_code(
-                    'residuo.recepcion.seq'
-                ) or _('Nueva')
+                    'residuo.recepcion.seq') or _('Nueva')
         return super().create(vals_list)
 
     def action_confirmar(self):
@@ -98,37 +64,50 @@ class ResiduoRecepcion(models.Model):
             for linea in rec.linea_ids:
                 if not linea.product_id:
                     raise UserError(
-                        _('Debe seleccionar el "Producto Destino" para el residuo: %s') 
-                        % (linea.descripcion_origen or 'Sin descripción')
-                    )
-                
-                # Nota: Se eliminó la validación estricta de 'consu' si se desea rastrear lotes,
-                # ya que usualmente los lotes requieren productos 'storable' (Almacenables).
-                # Si sus productos son 'consu' y rastrean lotes, mantenga la validación.
+                        _('Debe seleccionar el "Producto Destino" para el residuo: %s')
+                        % (linea.descripcion_origen or 'Sin descripción'))
                 if linea.product_id.type != 'consu':
-                     raise ValidationError(
-                        _('El producto seleccionado "%s" debe ser de tipo Consumible (consu).') 
-                        % linea.product_id.name
-                    )
-
+                    raise ValidationError(
+                        _('El producto "%s" debe ser de tipo Consumible.') % linea.product_id.name)
                 if linea.cantidad <= 0:
                     raise ValidationError(
-                        _('La cantidad del producto %s debe ser mayor a 0.')
-                        % linea.product_id.display_name
-                    )
+                        _('La cantidad del producto %s debe ser mayor a 0.') % linea.product_id.display_name)
 
             picking = rec._crear_picking()
-            rec.write({
-                'estado': 'confirmado',
-                'picking_id': picking.id,
-            })
+            rec.write({'estado': 'confirmado', 'picking_id': picking.id})
+            rec._propagar_datos_a_lotes()
+
+    def _propagar_datos_a_lotes(self):
+        """Al confirmar, escribe CRETIB + tipo_manejo + fecha_recepcion en el stock.lot."""
+        self.ensure_one()
+        for linea in self.linea_ids:
+            if not linea.lote_asignado:
+                continue
+            lote = self.env['stock.lot'].search([
+                ('name', '=', linea.lote_asignado),
+                ('product_id', '=', linea.product_id.id),
+                ('company_id', '=', self.company_id.id),
+            ], limit=1)
+            if not lote:
+                continue
+            vals = {
+                'fecha_recepcion_residuo': self.fecha_recepcion or fields.Date.context_today(self),
+                'clasificacion_corrosivo': linea.clasificacion_corrosivo,
+                'clasificacion_reactivo': linea.clasificacion_reactivo,
+                'clasificacion_explosivo': linea.clasificacion_explosivo,
+                'clasificacion_toxico': linea.clasificacion_toxico,
+                'clasificacion_inflamable': linea.clasificacion_inflamable,
+                'clasificacion_biologico': linea.clasificacion_biologico,
+            }
+            if linea.tipo_manejo_id:
+                vals['tipo_manejo_id'] = linea.tipo_manejo_id.id
+            lote.write(vals)
 
     def _crear_picking(self):
         self.ensure_one()
         stock_location_cliente = (
             self.partner_id.property_stock_customer
-            or self.env.ref('stock.stock_location_customers')
-        )
+            or self.env.ref('stock.stock_location_customers'))
         stock_location_destino = self.env.ref('stock.stock_location_stock')
         picking_type_in = self.env.ref('stock.picking_type_in')
 
@@ -142,69 +121,53 @@ class ResiduoRecepcion(models.Model):
         })
 
         for linea in self.linea_ids:
-            # 1. Crear el Stock Move (La demanda)
             move = self.env['stock.move'].create({
                 'description_picking': linea.product_id.display_name,
                 'product_id': linea.product_id.id,
                 'product_uom_qty': linea.cantidad,
-                'product_uom': linea.product_id.uom_id.id, # Odoo 19: stock.move usa 'product_uom' (legacy)
+                'product_uom': linea.product_id.uom_id.id,
                 'picking_id': picking.id,
                 'location_id': stock_location_cliente.id,
                 'location_dest_id': stock_location_destino.id,
             })
-            
-            # 2. Preparar valores para Stock Move Line (La ejecución real con lotes)
             move_line_vals = {
                 'move_id': move.id,
                 'picking_id': picking.id,
                 'product_id': linea.product_id.id,
-                'product_uom_id': linea.product_id.uom_id.id, # Odoo 19: stock.move.line usa 'product_uom_id'
+                'product_uom_id': linea.product_id.uom_id.id,
                 'quantity': linea.cantidad,
                 'location_id': stock_location_cliente.id,
                 'location_dest_id': stock_location_destino.id,
             }
-            
-            # 3. LÓGICA CORREGIDA PARA LOTES: Evitar error de duplicado
             if linea.lote_asignado:
-                # Buscamos si el lote YA existe para este producto y compañía
                 lote_existente = self.env['stock.lot'].search([
                     ('name', '=', linea.lote_asignado),
                     ('product_id', '=', linea.product_id.id),
-                    ('company_id', '=', self.company_id.id)
+                    ('company_id', '=', self.company_id.id),
                 ], limit=1)
-
                 if lote_existente:
-                    # Si existe, asignamos el ID (no intenta crear uno nuevo)
                     move_line_vals['lot_id'] = lote_existente.id
                 else:
-                    # Si no existe, asignamos el nombre (Odoo lo creará al vuelo)
                     move_line_vals['lot_name'] = linea.lote_asignado
-                
             self.env['stock.move.line'].create(move_line_vals)
 
-        # 4. Confirmar y asignar
         picking.action_confirm()
         picking.action_assign()
 
-        # 5. Validación automática
         if picking.state in ('assigned', 'confirmed'):
             ctx = self.env.context.copy()
             ctx.update({'skip_backorder': True})
-            
             try:
                 res = picking.with_context(ctx).button_validate()
                 if isinstance(res, dict) and res.get('res_model') == 'stock.backorder.confirmation':
                     wizard = self.env['stock.backorder.confirmation'].with_context(
-                        **res.get('context', {})
-                    ).create({})
+                        **res.get('context', {})).create({})
                     wizard.process()
             except ValidationError as e:
-                # Capturamos error si el lote ya está en stock y no permite reingreso, 
-                # pero permitimos que el picking se cree en estado 'Asignado' para revisión manual.
-                raise UserError(_("Se creó la entrada %s pero hubo un error al validarla automáticamente: %s") % (picking.name, str(e)))
+                raise UserError(
+                    _("Se creó la entrada %s pero error al validar: %s") % (picking.name, str(e)))
         else:
             raise UserError(_('No se pudo reservar el inventario.'))
-
         return picking
 
     def action_cancelar(self):
@@ -228,35 +191,53 @@ class ResiduoRecepcionLinea(models.Model):
     _name = 'residuo.recepcion.linea'
     _description = 'Detalle de Residuos Recolectados'
 
-    recepcion_id = fields.Many2one(
-        'residuo.recepcion',
-        string='Recepción',
-        ondelete='cascade',
-        required=True,
-    )
-    descripcion_origen = fields.Char(
-        string='Descripción Manifiesto',
-        readonly=True,
-    )
+    recepcion_id = fields.Many2one('residuo.recepcion', string='Recepción', ondelete='cascade', required=True)
+    descripcion_origen = fields.Char(string='Descripción Manifiesto', readonly=True)
     product_id = fields.Many2one(
-        'product.product',
-        string='Producto Destino',
-        required=False,
-        domain=[('type', '=', 'consu')],
-        context={'create': False},
+        'product.product', string='Producto Destino',
+        required=False, domain=[('type', '=', 'consu')], context={'create': False},
     )
-    lote_asignado = fields.Char(
-        string='Lote / Manifiesto',
-    )
+    lote_asignado = fields.Char(string='Lote / Manifiesto')
     cantidad = fields.Float(string='Cantidad', required=True, default=0.0)
     unidad = fields.Char(related='product_id.uom_id.name', readonly=True)
     categoria = fields.Char(related='product_id.categ_id.name', readonly=True)
+
+    # --- Tipo de Manejo ---
+    tipo_manejo_id = fields.Many2one('residuo.tipo.manejo', string='Tipo de Manejo')
+
+    # --- CRETIB (heredable desde manifiesto, editable) ---
+    clasificacion_corrosivo = fields.Boolean(string='C')
+    clasificacion_reactivo = fields.Boolean(string='R')
+    clasificacion_explosivo = fields.Boolean(string='E')
+    clasificacion_toxico = fields.Boolean(string='T')
+    clasificacion_inflamable = fields.Boolean(string='I')
+    clasificacion_biologico = fields.Boolean(string='B')
+
+    clasificaciones_display = fields.Char(
+        string='CRETIB', compute='_compute_clasificaciones_display', store=True,
+    )
+
+    @api.depends(
+        'clasificacion_corrosivo', 'clasificacion_reactivo',
+        'clasificacion_explosivo', 'clasificacion_toxico',
+        'clasificacion_inflamable', 'clasificacion_biologico',
+    )
+    def _compute_clasificaciones_display(self):
+        mapping = [
+            ('clasificacion_corrosivo', 'C'), ('clasificacion_reactivo', 'R'),
+            ('clasificacion_explosivo', 'E'), ('clasificacion_toxico', 'T'),
+            ('clasificacion_inflamable', 'I'), ('clasificacion_biologico', 'B'),
+        ]
+        for linea in self:
+            linea.clasificaciones_display = ', '.join(
+                code for field, code in mapping if getattr(linea, field))
 
     @api.constrains('cantidad')
     def _check_cantidad(self):
         for linea in self:
             if linea.cantidad <= 0:
                 raise ValidationError(_('La cantidad debe ser mayor a 0.'))
+
 
 class ProductTemplate(models.Model):
     _inherit = 'product.template'

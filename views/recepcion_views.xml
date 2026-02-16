@@ -6,10 +6,17 @@
         <field name="arch" type="xml">
             <form string="Recepción de Residuos">
                 <header>
-                    <button name="action_confirmar" type="object" string="Confirmar Recepción" class="btn-primary" invisible="estado != 'borrador'" confirm="¿Ha verificado que todos los productos destino fueron seleccionados correctamente?"/>
-                    <button name="action_cancelar" type="object" string="Cancelar" invisible="estado not in ('borrador', 'confirmado')"/>
-                    <button name="action_borrador" type="object" string="Volver a Borrador" invisible="estado != 'cancelado'"/>
-                    <field name="estado" widget="statusbar" statusbar_visible="borrador,confirmado"/>
+                    <button name="action_confirmar" type="object"
+                            string="Confirmar Recepción" class="btn-primary"
+                            invisible="estado != 'borrador'"
+                            confirm="¿Ha verificado productos destino, tipo de manejo y clasificación CRETIB?"/>
+                    <button name="action_cancelar" type="object" string="Cancelar"
+                            invisible="estado not in ('borrador', 'confirmado')"/>
+                    <button name="action_borrador" type="object"
+                            string="Volver a Borrador"
+                            invisible="estado != 'cancelado'"/>
+                    <field name="estado" widget="statusbar"
+                           statusbar_visible="borrador,confirmado"/>
                 </header>
                 <sheet>
                     <div class="oe_title">
@@ -18,7 +25,6 @@
                     <group>
                         <group>
                             <field name="sale_order_id" readonly="estado != 'borrador'"/>
-                            <!-- MANIFIESTO SE QUITA DE AQUÍ, SE AGREGA POR HERENCIA EN EL OTRO MÓDULO -->
                             <field name="partner_id" readonly="estado != 'borrador'"/>
                             <field name="fecha_recepcion" readonly="estado != 'borrador'"/>
                         </group>
@@ -29,15 +35,32 @@
                     </group>
                     <notebook>
                         <page string="Residuos Recolectados">
-                            <div class="alert alert-info" role="alert" invisible="estado != 'borrador'">
-                                <strong>Instrucciones:</strong> Verifique la descripción del Manifiesto (Izquierda) y seleccione el producto consumible correspondiente (Derecha).
+                            <div class="alert alert-info" role="alert"
+                                 invisible="estado != 'borrador'">
+                                <strong>Instrucciones:</strong>
+                                Verifique la descripción, seleccione el producto,
+                                asigne el <b>Tipo de Manejo</b> y verifique la clasificación <b>CRETIB</b>.
+                                Al confirmar, esta información se propagará al lote.
                             </div>
                             <field name="linea_ids" readonly="estado != 'borrador'">
                                 <list editable="bottom" create="false" delete="true">
-                                    <field name="descripcion_origen" string="Descripción Manifiesto" readonly="1" force_save="1" decoration-bf="1"/>
-                                    <field name="product_id" string="Producto Destino (Selec.)" placeholder="Seleccione consumible..." options="{'no_create': True, 'no_open': True}"/>
+                                    <field name="descripcion_origen"
+                                           string="Descripción Manifiesto"
+                                           readonly="1" force_save="1" decoration-bf="1"/>
+                                    <field name="product_id" string="Producto Destino"
+                                           placeholder="Seleccione consumible..."
+                                           options="{'no_create': True, 'no_open': True}"/>
                                     <field name="lote_asignado" string="Lote (Manifiesto)"/>
                                     <field name="cantidad"/>
+                                    <field name="tipo_manejo_id" string="Tipo de Manejo"
+                                           options="{'no_create_edit': True}"/>
+                                    <field name="clasificacion_corrosivo" string="C"/>
+                                    <field name="clasificacion_reactivo" string="R"/>
+                                    <field name="clasificacion_explosivo" string="E"/>
+                                    <field name="clasificacion_toxico" string="T"/>
+                                    <field name="clasificacion_inflamable" string="I"/>
+                                    <field name="clasificacion_biologico" string="B"/>
+                                    <field name="clasificaciones_display" string="CRETIB" optional="hide"/>
                                     <field name="unidad" readonly="1" optional="hide"/>
                                     <field name="categoria" readonly="1" optional="hide"/>
                                 </list>
@@ -63,7 +86,10 @@
                 <field name="partner_id"/>
                 <field name="fecha_recepcion"/>
                 <field name="picking_id" optional="hide"/>
-                <field name="estado" decoration-success="estado == 'confirmado'" decoration-muted="estado == 'cancelado'" decoration-info="estado == 'borrador'" widget="badge"/>
+                <field name="estado"
+                       decoration-success="estado == 'confirmado'"
+                       decoration-muted="estado == 'cancelado'"
+                       decoration-info="estado == 'borrador'" widget="badge"/>
             </list>
         </field>
     </record>
@@ -80,9 +106,10 @@
                 <filter string="Confirmado" name="confirmado" domain="[('estado', '=', 'confirmado')]"/>
                 <filter string="Cancelado" name="cancelado" domain="[('estado', '=', 'cancelado')]"/>
                 <separator/>
-                <filter string="Hoy" name="hoy" domain="[('fecha_recepcion', '=', context_today().strftime('%Y-%m-%d'))]"/>
-                    <filter string="Cliente" name="group_partner" context="{'group_by': 'partner_id'}"/>
-                    <filter string="Estado" name="group_estado" context="{'group_by': 'estado'}"/>
+                <filter string="Hoy" name="hoy"
+                        domain="[('fecha_recepcion', '=', context_today().strftime('%Y-%m-%d'))]"/>
+                <filter string="Cliente" name="group_partner" context="{'group_by': 'partner_id'}"/>
+                <filter string="Estado" name="group_estado" context="{'group_by': 'estado'}"/>
             </search>
         </field>
     </record>
@@ -94,9 +121,8 @@
         <field name="context">{'search_default_borrador': 1}</field>
     </record>
 
-    <menuitem id="menu_residuo_root"
-            name="Recolecciones"
-            sequence="10"
-            web_icon="residuo_recepcion_sai,static/description/icon.png"/>
-    <menuitem id="menu_residuo_recepcion" name="Recepciones" parent="menu_residuo_root" action="action_residuo_recepcion" sequence="10"/>
+    <menuitem id="menu_residuo_root" name="Recolecciones" sequence="10"
+              web_icon="residuo_recepcion_sai,static/description/icon.png"/>
+    <menuitem id="menu_residuo_recepcion" name="Recepciones"
+              parent="menu_residuo_root" action="action_residuo_recepcion" sequence="10"/>
 </odoo>

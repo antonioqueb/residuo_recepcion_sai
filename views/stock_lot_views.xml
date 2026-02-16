@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <record id="view_stock_lot_form_residuo" model="ir.ui.view">
+        <field name="name">stock.lot.form.residuo</field>
+        <field name="model">stock.lot</field>
+        <field name="inherit_id" ref="stock.view_production_lot_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//sheet" position="inside">
+                <notebook position="inside">
+                    <page string="Residuo Peligroso" name="residuo_peligroso">
+                        <div class="alert alert-danger" role="alert"
+                             invisible="caducidad_estado != 'expired'">
+                            <strong>⚠️ VENCIDO:</strong> Este lote ha superado la fecha límite de tratamiento.
+                        </div>
+                        <div class="alert alert-warning" role="alert"
+                             invisible="caducidad_estado != 'warning'">
+                            <strong>⏰ PRÓXIMO A VENCER:</strong> Quedan
+                            <field name="dias_restantes_caducidad" class="d-inline"/> días
+                            para la fecha límite de tratamiento.
+                        </div>
+                        <group col="2">
+                            <group string="Manejo y Caducidad">
+                                <field name="tipo_manejo_id" options="{'no_create_edit': True}"/>
+                                <field name="fecha_recepcion_residuo"/>
+                                <field name="fecha_caducidad_residuo"/>
+                                <field name="dias_restantes_caducidad"/>
+                                <field name="caducidad_estado" widget="badge"
+                                       decoration-success="caducidad_estado == 'ok'"
+                                       decoration-warning="caducidad_estado == 'warning'"
+                                       decoration-danger="caducidad_estado == 'expired'"/>
+                            </group>
+                            <group string="Clasificación CRETIB">
+                                <field name="clasificacion_corrosivo"/>
+                                <field name="clasificacion_reactivo"/>
+                                <field name="clasificacion_explosivo"/>
+                                <field name="clasificacion_toxico"/>
+                                <field name="clasificacion_inflamable"/>
+                                <field name="clasificacion_biologico"/>
+                                <field name="clasificaciones_display"/>
+                            </group>
+                        </group>
+                    </page>
+                </notebook>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="view_stock_lot_list_residuo" model="ir.ui.view">
+        <field name="name">stock.lot.list.residuo</field>
+        <field name="model">stock.lot</field>
+        <field name="inherit_id" ref="stock.view_production_lot_tree"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='product_id']" position="after">
+                <field name="tipo_manejo_id" optional="show"/>
+                <field name="clasificaciones_display" string="CRETIB" optional="show"/>
+                <field name="fecha_caducidad_residuo" optional="show"
+                       decoration-danger="caducidad_estado == 'expired'"
+                       decoration-warning="caducidad_estado == 'warning'"/>
+                <field name="dias_restantes_caducidad" optional="hide"/>
+                <field name="caducidad_estado" widget="badge" optional="show"
+                       decoration-success="caducidad_estado == 'ok'"
+                       decoration-warning="caducidad_estado == 'warning'"
+                       decoration-danger="caducidad_estado == 'expired'"/>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="view_stock_lot_search_residuo" model="ir.ui.view">
+        <field name="name">stock.lot.search.residuo</field>
+        <field name="model">stock.lot</field>
+        <field name="inherit_id" ref="stock.search_product_lot_filter"/>
+        <field name="arch" type="xml">
+            <xpath expr="//search" position="inside">
+                <field name="tipo_manejo_id"/>
+                <separator/>
+                <filter string="Próximos a vencer (30 días)" name="proximos_vencer"
+                        domain="[('caducidad_estado', '=', 'warning')]"/>
+                <filter string="Vencidos" name="vencidos"
+                        domain="[('caducidad_estado', '=', 'expired')]"/>
+                <separator/>
+                <filter string="Tipo de Manejo" name="group_tipo_manejo"
+                        context="{'group_by': 'tipo_manejo_id'}"/>
+                <filter string="Estado Caducidad" name="group_caducidad"
+                        context="{'group_by': 'caducidad_estado'}"/>
+            </xpath>
+        </field>
+    </record>
+</odoo>

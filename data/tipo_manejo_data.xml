@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo noupdate="1">
+    <record id="tipo_manejo_incineracion" model="residuo.tipo.manejo">
+        <field name="name">Incineración</field>
+        <field name="code">INC</field>
+        <field name="description">Destrucción térmica de residuos peligrosos</field>
+        <field name="sequence">10</field>
+    </record>
+    <record id="tipo_manejo_confinamiento" model="residuo.tipo.manejo">
+        <field name="name">Confinamiento</field>
+        <field name="code">CON</field>
+        <field name="description">Disposición final en celda de confinamiento controlado</field>
+        <field name="sequence">20</field>
+    </record>
+    <record id="tipo_manejo_reciclaje" model="residuo.tipo.manejo">
+        <field name="name">Reciclaje</field>
+        <field name="code">REC</field>
+        <field name="description">Recuperación y reutilización de materiales</field>
+        <field name="sequence">30</field>
+    </record>
+    <record id="tipo_manejo_tratamiento" model="residuo.tipo.manejo">
+        <field name="name">Tratamiento Físico-Químico</field>
+        <field name="code">TFQ</field>
+        <field name="description">Tratamiento mediante procesos físicos o químicos</field>
+        <field name="sequence">40</field>
+    </record>
+    <record id="tipo_manejo_bioremediacion" model="residuo.tipo.manejo">
+        <field name="name">Biorremediación</field>
+        <field name="code">BIO</field>
+        <field name="description">Tratamiento biológico de residuos</field>
+        <field name="sequence">50</field>
+    </record>
+    <record id="tipo_manejo_coprocesamiento" model="residuo.tipo.manejo">
+        <field name="name">Co-procesamiento</field>
+        <field name="code">COP</field>
+        <field name="description">Uso como combustible alterno en hornos cementeros</field>
+        <field name="sequence">60</field>
+    </record>
+    <record id="tipo_manejo_estabilizacion" model="residuo.tipo.manejo">
+        <field name="name">Estabilización / Solidificación</field>
+        <field name="code">EST</field>
+        <field name="description">Tratamiento para reducir la movilidad de contaminantes</field>
+        <field name="sequence">70</field>
+    </record>
+</odoo>

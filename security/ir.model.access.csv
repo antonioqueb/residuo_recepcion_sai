@@ -1,3 +1,5 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
-access_residuo_recepcion,residuo.recepcion.all,model_residuo_recepcion,base.group_user,1,1,1,1
-access_residuo_recepcion_linea,residuo.recepcion.linea.all,model_residuo_recepcion_linea,base.group_user,1,1,1,1
+access_residuo_recepcion_user,residuo.recepcion.user,model_residuo_recepcion,base.group_user,1,1,1,1
+access_residuo_recepcion_linea_user,residuo.recepcion.linea.user,model_residuo_recepcion_linea,base.group_user,1,1,1,1
+access_residuo_tipo_manejo_user,residuo.tipo.manejo.user,model_residuo_tipo_manejo,base.group_user,1,1,1,0
+access_residuo_tipo_manejo_manager,residuo.tipo.manejo.manager,model_residuo_tipo_manejo,stock.group_stock_manager,1,1,1,1

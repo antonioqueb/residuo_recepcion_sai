@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <record id="view_tipo_manejo_list" model="ir.ui.view">
+        <field name="name">residuo.tipo.manejo.list</field>
+        <field name="model">residuo.tipo.manejo</field>
+        <field name="arch" type="xml">
+            <list editable="bottom">
+                <field name="sequence" widget="handle"/>
+                <field name="code"/>
+                <field name="name"/>
+                <field name="description"/>
+                <field name="active" optional="hide"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_tipo_manejo_form" model="ir.ui.view">
+        <field name="name">residuo.tipo.manejo.form</field>
+        <field name="model">residuo.tipo.manejo</field>
+        <field name="arch" type="xml">
+            <form string="Tipo de Manejo">
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="name"/>
+                            <field name="code"/>
+                        </group>
+                        <group>
+                            <field name="sequence"/>
+                            <field name="active"/>
+                            <field name="company_id" groups="base.group_multi_company"/>
+                        </group>
+                    </group>
+                    <group>
+                        <field name="description"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_tipo_manejo" model="ir.actions.act_window">
+        <field name="name">Tipos de Manejo</field>
+        <field name="res_model">residuo.tipo.manejo</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <menuitem id="menu_tipo_manejo"
+              name="Tipos de Manejo"
+              parent="menu_residuo_root"
+              action="action_tipo_manejo"
+              sequence="50"/>
+</odoo>

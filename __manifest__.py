@@ -1,6 +1,6 @@
 {
     'name': 'Recepción de Residuos',
-    'version': '19.0.1.1.0',
+    'version': '19.0.2.0.0',
     'summary': 'Gestión de recepción de residuos peligrosos desde órdenes de venta',
     'category': 'Inventory',
     'author': 'Alphaqueb Consulting',
@@ -9,6 +9,10 @@
     'data': [
         'security/ir.model.access.csv',
         'data/secuencia_recepcion.xml',
+        'data/tipo_manejo_data.xml',
+        'data/cron_caducidad.xml',
+        'views/tipo_manejo_views.xml',
+        'views/stock_lot_views.xml',
         'views/recepcion_views.xml',
         'views/sale_order_views.xml',
     ],
