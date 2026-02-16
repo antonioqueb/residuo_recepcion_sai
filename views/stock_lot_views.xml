@@ -74,14 +74,13 @@
                 <field name="tipo_manejo_id"/>
                 <separator/>
                 <filter string="Próximos a vencer (30 días)" name="proximos_vencer"
-                        domain="[('caducidad_estado', '=', 'warning')]"/>
+                        domain="[('fecha_caducidad_residuo', '&gt;=', (context_today()).strftime('%Y-%m-%d')),
+                                 ('fecha_caducidad_residuo', '&lt;=', (context_today() + datetime.timedelta(days=30)).strftime('%Y-%m-%d'))]"/>
                 <filter string="Vencidos" name="vencidos"
-                        domain="[('caducidad_estado', '=', 'expired')]"/>
+                        domain="[('fecha_caducidad_residuo', '&lt;', context_today().strftime('%Y-%m-%d'))]"/>
                 <separator/>
                 <filter string="Tipo de Manejo" name="group_tipo_manejo"
                         context="{'group_by': 'tipo_manejo_id'}"/>
-                <filter string="Estado Caducidad" name="group_caducidad"
-                        context="{'group_by': 'caducidad_estado'}"/>
             </xpath>
         </field>
     </record>
