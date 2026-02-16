@@ -27,6 +27,7 @@ class SaleOrder(models.Model):
         for order in self:
             recepcion = self.env['residuo.recepcion'].create({
                 'sale_order_id': order.id,
+'partner_id': order.partner_id.id,
             })
             _logger.info(
                 'Recepción creada automáticamente: %s (ID: %s) para SO: %s',
