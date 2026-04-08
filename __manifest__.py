@@ -11,9 +11,10 @@
         'data/secuencia_recepcion.xml',
         'data/tipo_manejo_data.xml',
         'data/cron_caducidad.xml',
-        'views/tipo_manejo_views.xml',
+
+        'views/recepcion_views.xml',      # ← primero
+        'views/tipo_manejo_views.xml',    # ← después
         'views/stock_lot_views.xml',
-        'views/recepcion_views.xml',
         'views/sale_order_views.xml',
     ],
     'installable': True,
