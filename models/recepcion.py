@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from odoo import models, fields, api, _
 from odoo.exceptions import UserError, ValidationError
 
@@ -166,9 +168,41 @@ class ResiduoRecepcion(models.Model):
             except ValidationError as e:
                 raise UserError(
                     _("Se creó la entrada %s pero error al validar: %s") % (picking.name, str(e)))
+            self._forzar_fechas_movimiento(picking)
         else:
             raise UserError(_('No se pudo reservar el inventario.'))
         return picking
+
+    def _forzar_fechas_movimiento(self, picking):
+        """Fuerza la fecha del picking, movimientos, líneas y capas de valoración
+        a la Fecha de Recepción capturada, en lugar de la fecha de validación.
+
+        Esto es lo que hace que la bitácora de historial de movimientos
+        (que se basa en ``stock.move.line.date``) refleje la fecha real de
+        recepción y no el momento en que se confirmó el registro.
+        """
+        self.ensure_one()
+        fecha = self.fecha_recepcion or fields.Date.context_today(self)
+        # La fecha capturada es Date; la combinamos con la hora actual para
+        # conservar el orden cronológico entre movimientos del mismo día.
+        target_dt = datetime.combine(fecha, fields.Datetime.now().time())
+
+        picking.write({
+            'scheduled_date': target_dt,
+            'date_done': target_dt,
+        })
+        picking.move_ids.write({'date': target_dt})
+        picking.move_line_ids.write({'date': target_dt})
+
+        # Capas de valoración (si el producto se valoriza), para que el
+        # reporte de valoración también use la fecha de recepción.
+        # create_date es un campo de sistema; lo ajustamos de forma defensiva.
+        capas = picking.move_ids.stock_valuation_layer_ids
+        if capas:
+            try:
+                capas.sudo().write({'create_date': target_dt})
+            except Exception:
+                pass
 
     def action_cancelar(self):
         for rec in self:
