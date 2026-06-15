@@ -196,13 +196,16 @@ class ResiduoRecepcion(models.Model):
 
         # Capas de valoración (si el producto se valoriza), para que el
         # reporte de valoración también use la fecha de recepción.
+        # El campo solo existe si 'stock_account' está instalado; de lo
+        # contrario 'stock.move' no tiene 'stock_valuation_layer_ids'.
         # create_date es un campo de sistema; lo ajustamos de forma defensiva.
-        capas = picking.move_ids.stock_valuation_layer_ids
-        if capas:
-            try:
-                capas.sudo().write({'create_date': target_dt})
-            except Exception:
-                pass
+        if 'stock_valuation_layer_ids' in picking.move_ids._fields:
+            capas = picking.move_ids.stock_valuation_layer_ids
+            if capas:
+                try:
+                    capas.sudo().write({'create_date': target_dt})
+                except Exception:
+                    pass
 
     def action_cancelar(self):
         for rec in self:
